@@ -57,7 +57,7 @@ func TestHighCardinalityLabelSpace(t *testing.T) {
 	cfg := Config{Prefix: "lab", CustomerCount: 2000, ActivePerTick: 400, TickSeconds: 60}
 	rm := collect(t, cfg, 5)
 
-	s := sums(t, rm, "lab_api_requests_total")
+	s := sums(t, rm, "lab_api_requests")
 	if !s.IsMonotonic {
 		t.Error("api requests counter must be monotonic")
 	}
@@ -94,8 +94,8 @@ func TestSLONumeratorNeverExceedsDenominator(t *testing.T) {
 	cfg := Config{Prefix: "lab", CustomerCount: 100, ActivePerTick: 50, TickSeconds: 60}
 	rm := collect(t, cfg, 10)
 
-	good := sums(t, rm, "lab_slo_good_events_total")
-	total := sums(t, rm, "lab_slo_total_events_total")
+	good := sums(t, rm, "lab_slo_good_events")
+	total := sums(t, rm, "lab_slo_total_events")
 
 	// A nil encoder would render every attribute set as the empty string and
 	// silently collapse all series into one bucket.
@@ -159,7 +159,7 @@ func TestVariationIsVisible(t *testing.T) {
 			t.Fatalf("Collect: %v", err)
 		}
 		var cum int64
-		for _, dp := range sums(t, rm, "lab_slo_total_events_total").DataPoints {
+		for _, dp := range sums(t, rm, "lab_slo_total_events").DataPoints {
 			cum += dp.Value
 		}
 		perTick = append(perTick, cum-prev)

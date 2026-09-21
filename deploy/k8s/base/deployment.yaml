@@ -52,10 +52,17 @@ spec:
                 fieldRef:
                   fieldPath: metadata.name
 
+            # Named explicitly rather than pulled in with envFrom, so an
+            # overlay can repoint it at a Coralogix secret that already
+            # exists in the cluster instead of duplicating the key.
+            - name: CORALOGIX_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: cx-metrics-gen
+                  key: CORALOGIX_API_KEY
+
           envFrom:
             - configMapRef:
-                name: cx-metrics-gen
-            - secretRef:
                 name: cx-metrics-gen
 
           livenessProbe:

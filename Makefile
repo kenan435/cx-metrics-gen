@@ -5,6 +5,9 @@ NAMESPACE ?= cx-metrics-gen
 # so a deploy cannot land on whatever context happened to be selected:
 #   make deploy CONTEXT=kenan-lab
 CONTEXT   ?=
+# Which kustomize directory to apply. Override for a cluster-specific overlay:
+#   make deploy OVERLAY=deploy/k8s/overlays/kenan-lab CONTEXT=kenan-lab
+OVERLAY   ?= deploy/k8s/base
 KUBECTL   := kubectl $(if $(CONTEXT),--context $(CONTEXT),)
 PLATFORMS ?= linux/amd64,linux/arm64
 
@@ -43,7 +46,7 @@ secret:
 		--dry-run=client -o yaml | $(KUBECTL) apply -f -
 
 deploy:
-	$(KUBECTL) apply -k deploy/k8s
+	$(KUBECTL) apply -k $(OVERLAY)
 
 logs:
 	$(KUBECTL) -n $(NAMESPACE) logs -l app.kubernetes.io/name=cx-metrics-gen -f --tail=50
@@ -52,7 +55,7 @@ status:
 	$(KUBECTL) -n $(NAMESPACE) port-forward svc/cx-metrics-gen 8080:8080
 
 undeploy:
-	$(KUBECTL) delete -k deploy/k8s --ignore-not-found
+	$(KUBECTL) delete -k $(OVERLAY) --ignore-not-found
 
 clean:
 	rm -f cx-metrics-gen

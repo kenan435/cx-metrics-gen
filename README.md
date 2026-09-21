@@ -27,7 +27,8 @@ internal/generator/generator.go      Instruments, customer catalog, per tick log
 internal/generator/shape.go          Diurnal curve, bursts, brownouts, noise
 internal/generator/generator_test.go Asserts the data shape, not just the build
 Dockerfile                           Static binary on distroless
-deploy/k8s/                          Namespace, ConfigMap, Service, Deployment, kustomization
+deploy/k8s/base/                     Namespace, ConfigMap, Service, Deployment
+deploy/k8s/overlays/kenan-lab/       Example overlay: existing namespace, existing secret, ECR image
 recording-rules/                     Example rules for both test cases
 .github/workflows/ci.yaml            Test, then build and push the image to GHCR
 ```
@@ -40,7 +41,7 @@ recording-rules/                     Example rules for both test cases
 make secret CONTEXT=my-cluster CORALOGIX_API_KEY=cxtp_xxx
 
 # 2. Point the ConfigMap at your Coralogix region if it is not EU2
-$EDITOR deploy/k8s/configmap.yaml
+$EDITOR deploy/k8s/base/configmap.yaml
 
 # 3. Deploy
 make deploy CONTEXT=my-cluster
@@ -162,6 +163,25 @@ between ticks, which is exactly what makes high cardinality expensive.
 The customer catalog is built from a fixed seed, so a given `customer_id`
 always maps to the same service, route and tier no matter which pod emits it.
 
+## Deploying into an existing namespace
+
+`deploy/k8s/overlays/kenan-lab` is a worked example of the common case where
+the cluster already runs Coralogix: it deploys into the existing `coralogix`
+namespace and reads the ingestion key straight out of the `coralogix-keys`
+secret that is already there, instead of holding a second copy of it.
+
+```bash
+make deploy OVERLAY=deploy/k8s/overlays/kenan-lab CONTEXT=kenan-lab
+```
+
+It also points the image at ECR in the same AWS account, which EKS nodes can
+pull with `AmazonEC2ContainerRegistryPullOnly` and no imagePullSecret. To
+rebuild and push that image without a local Docker daemon:
+
+```bash
+ko build --bare --platform=linux/amd64 -t v2 .
+```
+
 ## Recording rules
 
 Both files under `recording-rules/` are plain Prometheus rule group YAML, ready
@@ -212,10 +232,26 @@ limit and watch for the OTel Go SDK's experimental cardinality limit
 (`OTEL_GO_X_CARDINALITY_LIMIT`), which is off by default but will silently fold
 overflow series into a single bucket if you turn it on.
 
-**Metric naming.** The instruments are named with the `_total` suffix already
-present, so Prometheus style normalisation on the Coralogix side does not
-double-append it. Confirm the exact final names in Metrics Explorer before
-writing rules against them.
+**Metric naming is not what you write in the code.** Coralogix applies
+Prometheus normalisation on ingest, and it does two things to the instrument
+name: it appends `_total` to a monotonic sum, and it folds the OTel unit into
+the name. An instrument called `lab_api_requests_total` with unit `{request}`
+arrives as:
+
+```
+lab_api_requests_total__request__total
+```
+
+So the instruments here carry **no** `_total` suffix and **no** unit, and the
+clean names come out the other side. Verify with
+`cx metrics search --name 'lab_*'` before writing rules against them.
+
+| Instrument in Go | Series in Coralogix |
+|---|---|
+| `lab_api_requests` | `lab_api_requests_total` |
+| `lab_slo_good_events` | `lab_slo_good_events_total` |
+| `lab_slo_total_events` | `lab_slo_total_events_total` |
+| `lab_metricsgen_ticks` | `lab_metricsgen_ticks_total` |
 
 **The pod is locked down** (non-root, read-only root filesystem, all
 capabilities dropped, `RuntimeDefault` seccomp) because it costs nothing here.

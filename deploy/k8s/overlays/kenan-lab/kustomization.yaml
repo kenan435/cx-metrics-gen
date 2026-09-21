@@ -1,0 +1,52 @@
+# kenan-lab overlay.
+#
+# Differs from the base in three ways:
+#   - runs in the existing "coralogix" namespace, so it can read the
+#     Coralogix ingestion key that is already in this cluster rather than
+#     holding a second copy of it,
+#   - pulls from ECR in the same AWS account, which the node role can do via
+#     AmazonEC2ContainerRegistryPullOnly with no imagePullSecret,
+#   - drops the base Namespace object, which this overlay does not need.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: coralogix
+
+resources:
+  - ../../base
+
+images:
+  - name: ghcr.io/kenan435/cx-metrics-gen
+    newName: 182602700241.dkr.ecr.eu-north-1.amazonaws.com/cx-metrics-gen
+    newTag: v2
+
+patches:
+  - target:
+      kind: Namespace
+      name: cx-metrics-gen
+    patch: |
+      $patch: delete
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: cx-metrics-gen
+
+  - target:
+      kind: Deployment
+      name: cx-metrics-gen
+    patch: |
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: cx-metrics-gen
+      spec:
+        template:
+          spec:
+            containers:
+              - name: cx-metrics-gen
+                env:
+                  - name: CORALOGIX_API_KEY
+                    valueFrom:
+                      secretKeyRef:
+                        name: coralogix-keys
+                        key: PRIVATE_KEY

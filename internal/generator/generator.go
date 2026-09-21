@@ -105,11 +105,17 @@ func New(mp metric.MeterProvider, cfg Config) (*Generator, error) {
 	g := &Generator{cfg: cfg}
 	var err error
 
+	// Instrument names carry no _total suffix and no unit, on purpose.
+	// Coralogix applies Prometheus normalisation on ingest, which appends
+	// _total to a monotonic sum and folds the unit into the name. Naming this
+	// "lab_api_requests_total" with unit "{request}" produced the actual
+	// series "lab_api_requests_total__request__total". Leaving both off yields
+	// the clean "lab_api_requests_total" that the recording rules expect.
+
 	// Test case 1: the expensive one.
 	g.apiRequests, err = meter.Int64Counter(
-		cfg.Prefix+"_api_requests_total",
+		cfg.Prefix+"_api_requests",
 		metric.WithDescription("Synthetic API requests, labelled per customer. High cardinality on purpose."),
-		metric.WithUnit("{request}"),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("create api requests counter: %w", err)
@@ -117,17 +123,15 @@ func New(mp metric.MeterProvider, cfg Config) (*Generator, error) {
 
 	// Test case 2: SLO numerator and denominator.
 	g.sloGood, err = meter.Int64Counter(
-		cfg.Prefix+"_slo_good_events_total",
+		cfg.Prefix+"_slo_good_events",
 		metric.WithDescription("Synthetic SLO numerator: requests that met the objective."),
-		metric.WithUnit("{event}"),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("create slo good counter: %w", err)
 	}
 	g.sloTotal, err = meter.Int64Counter(
-		cfg.Prefix+"_slo_total_events_total",
+		cfg.Prefix+"_slo_total_events",
 		metric.WithDescription("Synthetic SLO denominator: all valid requests."),
-		metric.WithUnit("{event}"),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("create slo total counter: %w", err)
@@ -136,7 +140,7 @@ func New(mp metric.MeterProvider, cfg Config) (*Generator, error) {
 	// A single low cardinality heartbeat, so you can tell "the rule produced
 	// nothing" apart from "the Lambda never ran".
 	g.ticks, err = meter.Int64Counter(
-		cfg.Prefix+"_metricsgen_ticks_total",
+		cfg.Prefix+"_metricsgen_ticks",
 		metric.WithDescription("Number of generator invocations."),
 	)
 	if err != nil {
