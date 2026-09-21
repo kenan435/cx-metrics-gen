@@ -71,11 +71,26 @@ Two things need to be true:
 make image-push TAG=main
 ```
 
-**2. The cluster has to be able to pull it.** GHCR packages inherit the
-repository's visibility, so for a private repo the package is private too and
-the pull will fail with `ImagePullBackOff`. Either flip the package to public
-under **Packages > cx-metrics-gen > Package settings**, or create a pull
-secret:
+**2. The cluster has to be able to pull it.** This one catches people out:
+**GHCR package visibility does not follow repository visibility.** The package
+inherits the repo's visibility at first publish and then keeps it, so making
+the repo public later leaves the image private and the pod lands in
+`ImagePullBackOff`. There is no REST API for this; it is a UI setting.
+
+Check from anywhere, without Docker:
+
+```bash
+TOKEN=$(curl -s "https://ghcr.io/token?scope=repository:kenan435/cx-metrics-gen:pull&service=ghcr.io" \
+  | python3 -c 'import sys,json;print(json.load(sys.stdin)["token"])')
+curl -s -o /dev/null -w '%{http_code}\n' -H "Authorization: Bearer $TOKEN" \
+  -H "Accept: application/vnd.oci.image.index.v1+json" \
+  https://ghcr.io/v2/kenan435/cx-metrics-gen/manifests/main
+# 200 = anonymous pull works. 403 = still private.
+```
+
+If it returns 403, either flip the package to public at
+**github.com/users/kenan435/packages/container/cx-metrics-gen/settings** >
+Danger Zone > Change visibility, or keep it private and add a pull secret:
 
 ```bash
 kubectl -n cx-metrics-gen create secret docker-registry ghcr \
