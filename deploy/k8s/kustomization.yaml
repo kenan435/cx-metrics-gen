@@ -1,0 +1,18 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: cx-metrics-gen
+
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - service.yaml
+  - deployment.yaml
+  # The secret is deliberately not listed. Create it out of band so a real key
+  # never lands in git:
+  #   kubectl -n cx-metrics-gen create secret generic cx-metrics-gen \
+  #     --from-literal=CORALOGIX_API_KEY=cxtp_xxx
+
+images:
+  - name: ghcr.io/kenan435/cx-metrics-gen
+    newTag: main

@@ -1,0 +1,54 @@
+# Test case 2: SLO style pre-aggregation and division.
+#
+# The generator emits a numerator (good events) and a denominator (total
+# events) as separate counters, which is the shape most SLO tooling expects.
+#
+# Rules inside a group evaluate in order, so lab:slo_success_ratio:rate5m can
+# read the two rules declared above it. If you would rather not rely on that,
+# use the self-contained variant in the second group.
+groups:
+  - name: lab-slo-chained
+    interval: 60s
+    rules:
+      - record: lab:slo_good:rate5m
+        expr: sum by (service, route) (rate(lab_slo_good_events_total[5m]))
+
+      - record: lab:slo_total:rate5m
+        expr: sum by (service, route) (rate(lab_slo_total_events_total[5m]))
+
+      # The division under test. Pre-aggregating first is the point: dividing
+      # raw series pairwise would be far more expensive and would break as soon
+      # as the label sets stop matching exactly.
+      - record: lab:slo_success_ratio:rate5m
+        expr: lab:slo_good:rate5m / lab:slo_total:rate5m
+
+      # Error budget burn rate against a 99.5% objective. Above 1 means you are
+      # spending budget faster than the window allows.
+      - record: lab:slo_burn_rate:rate5m
+        expr: (1 - lab:slo_success_ratio:rate5m) / 0.005
+
+  - name: lab-slo-standalone
+    interval: 60s
+    rules:
+      # Same ratio with no dependency on another recording rule. Slower to
+      # evaluate, but it works regardless of intra-group ordering semantics.
+      - record: lab:slo_success_ratio_direct:rate5m
+        expr: |
+          sum by (service, route) (rate(lab_slo_good_events_total[5m]))
+            /
+          sum by (service, route) (rate(lab_slo_total_events_total[5m]))
+
+      # Account wide SLI, one series, cheap to alert on.
+      - record: lab:slo_success_ratio_global:rate5m
+        expr: |
+          sum(rate(lab_slo_good_events_total[5m]))
+            /
+          sum(rate(lab_slo_total_events_total[5m]))
+
+# Verify after roughly 10 minutes of data:
+#
+#   lab:slo_success_ratio:rate5m                    -> ~0.985 to 0.999, dipping
+#     during the generator's scheduled brownouts
+#   lab:slo_success_ratio:rate5m
+#     - lab:slo_success_ratio_direct:rate5m         -> ~0, the two agree
+#   lab:slo_burn_rate:rate5m > 1                    -> fires during a brownout

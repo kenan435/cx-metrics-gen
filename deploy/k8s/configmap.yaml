@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cx-metrics-gen
+  namespace: cx-metrics-gen
+data:
+  # Match this to your Coralogix region.
+  CORALOGIX_ENDPOINT: "ingress.eu2.coralogix.com:443"
+  CORALOGIX_APPLICATION: "lab"
+  CORALOGIX_SUBSYSTEM: "metrics-gen"
+  OTEL_SERVICE_NAME: "cx-metrics-gen"
+
+  METRIC_PREFIX: "lab"
+  # Size of the customer_id label space, the thing test case 1 asks a
+  # recording rule to collapse.
+  CUSTOMER_COUNT: "2000"
+  ACTIVE_CUSTOMERS_PER_TICK: "400"
+  # How much simulated wall clock each tick represents. Keep it equal to the
+  # real tick interval or the rates will be wrong.
+  TICK_SECONDS: "60"
+  EXPORT_INTERVAL_SECONDS: "60"

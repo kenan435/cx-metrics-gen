@@ -1,0 +1,49 @@
+# Test case 1: collapse the customer_id label.
+#
+# Raw series count is roughly CUSTOMER_COUNT x 3 status classes, so ~6000 at the
+# default settings, multiplied again by every pod instance that has ever run.
+# Every rule below reduces that to double digits.
+#
+# Paste into Coralogix: Data Flow > Recording Rules > New rule group set.
+groups:
+  - name: lab-cardinality-reduction
+    interval: 60s
+    rules:
+      # The headline test. Naming the labels you keep is the robust form:
+      # "sum without (customer_id)" would also retain service_instance_id,
+      # which changes on every pod restart and quietly regrows cardinality.
+      - record: lab:api_requests:rate5m
+        expr: sum by (service, route, status_class) (rate(lab_api_requests_total[5m]))
+
+      # Same idea, keeping only the labels worth paying for. Tier is safe
+      # because it has 3 values, unlike the customer it belongs to.
+      - record: lab:api_requests_by_tier:rate5m
+        expr: sum by (service, tier, status_class) (rate(lab_api_requests_total[5m]))
+
+      # Per service error ratio, computed straight off the raw metric in one
+      # rule so it does not depend on evaluation order.
+      - record: lab:api_error_ratio:rate5m
+        expr: |
+          sum by (service) (rate(lab_api_requests_total{status_class="5xx"}[5m]))
+            /
+          sum by (service) (rate(lab_api_requests_total[5m]))
+
+      # Cardinality of the raw metric, so you can watch the thing you are trying
+      # to control. Useful as the "before" number in a demo.
+      - record: lab:api_requests:series_count
+        expr: count(count by (customer_id) (lab_api_requests_total))
+
+# Verify after roughly 10 minutes of data:
+#
+#   count(count by (customer_id) (lab_api_requests_total))   -> thousands
+#   count(lab:api_requests:rate5m)                           -> tens
+#   sum(lab:api_requests:rate5m)                             -> should track
+#     sum(rate(lab_api_requests_total[5m])) closely
+#
+# If you want the "drop one label" phrasing instead of "keep these labels",
+# remember to name every high cardinality label explicitly:
+#
+#   sum without (customer_id, service_instance_id) (rate(lab_api_requests_total[5m]))
+#
+# Confirm the exact spelling of the instance label in Metrics Explorer first:
+# the OTLP resource attribute service.instance.id is normalised on ingest.
