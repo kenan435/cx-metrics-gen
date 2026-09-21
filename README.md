@@ -35,17 +35,18 @@ recording-rules/                     Example rules for both test cases
 ## Quick start
 
 ```bash
-# 1. Namespace and API key
-make secret CORALOGIX_API_KEY=cxtp_xxx
+# 1. Namespace and API key. CONTEXT is optional but stops a deploy landing on
+#    whatever kubectl context happened to be selected.
+make secret CONTEXT=my-cluster CORALOGIX_API_KEY=cxtp_xxx
 
 # 2. Point the ConfigMap at your Coralogix region if it is not EU2
 $EDITOR deploy/k8s/configmap.yaml
 
 # 3. Deploy
-make deploy
+make deploy CONTEXT=my-cluster
 
 # 4. Watch it tick
-make logs
+make logs CONTEXT=my-cluster
 ```
 
 Expected log output:

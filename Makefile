@@ -1,6 +1,11 @@
 IMAGE     ?= ghcr.io/kenan435/cx-metrics-gen
 TAG       ?= dev
 NAMESPACE ?= cx-metrics-gen
+# Target cluster. Leave empty to use the current context, or set it explicitly
+# so a deploy cannot land on whatever context happened to be selected:
+#   make deploy CONTEXT=kenan-lab
+CONTEXT   ?=
+KUBECTL   := kubectl $(if $(CONTEXT),--context $(CONTEXT),)
 PLATFORMS ?= linux/amd64,linux/arm64
 
 .PHONY: test vet fmt build run image image-push deploy secret logs status undeploy clean
@@ -32,22 +37,22 @@ image-push:
 # Create the API key secret. Usage: make secret CORALOGIX_API_KEY=cxtp_xxx
 secret:
 	@test -n "$(CORALOGIX_API_KEY)" || (echo "set CORALOGIX_API_KEY" && exit 1)
-	kubectl create namespace $(NAMESPACE) --dry-run=client -o yaml | kubectl apply -f -
-	kubectl -n $(NAMESPACE) create secret generic cx-metrics-gen \
+	$(KUBECTL) create namespace $(NAMESPACE) --dry-run=client -o yaml | $(KUBECTL) apply -f -
+	$(KUBECTL) -n $(NAMESPACE) create secret generic cx-metrics-gen \
 		--from-literal=CORALOGIX_API_KEY=$(CORALOGIX_API_KEY) \
-		--dry-run=client -o yaml | kubectl apply -f -
+		--dry-run=client -o yaml | $(KUBECTL) apply -f -
 
 deploy:
-	kubectl apply -k deploy/k8s
+	$(KUBECTL) apply -k deploy/k8s
 
 logs:
-	kubectl -n $(NAMESPACE) logs -l app.kubernetes.io/name=cx-metrics-gen -f --tail=50
+	$(KUBECTL) -n $(NAMESPACE) logs -l app.kubernetes.io/name=cx-metrics-gen -f --tail=50
 
 status:
-	kubectl -n $(NAMESPACE) port-forward svc/cx-metrics-gen 8080:8080
+	$(KUBECTL) -n $(NAMESPACE) port-forward svc/cx-metrics-gen 8080:8080
 
 undeploy:
-	kubectl delete -k deploy/k8s --ignore-not-found
+	$(KUBECTL) delete -k deploy/k8s --ignore-not-found
 
 clean:
 	rm -f cx-metrics-gen
